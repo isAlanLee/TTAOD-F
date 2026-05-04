@@ -29,4 +29,4 @@ echo "Work dir: ${WORK_DIR}"
   corruption_type="'${CORRUPTION_TYPE}'" \
   model.detector.backbone.TTWS_init=True \
   model.detector.backbone.TTWS_file="'${PROMPT_FILE}'" \
-  --work-dir "${WORK_DIR}"
+  --work-dir "${WORK_DIR}" 2>&1 | tee ./run_ttws_init_${CORRUPTION_TYPE}.log
