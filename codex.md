@@ -29,3 +29,9 @@
 - 已新增 `run_ttws_init.sh`，用于 Linux 环境下运行 TTWS visual prompt 初始化。
 - 已新增 `run_tta_train.sh`，用于 Linux 环境下运行测试时自适应训练。
 - 两个脚本均支持通过环境变量覆盖配置、腐化类型、prompt 文件、work dir 等常用参数。
+
+### 日志检查
+- 用户提供的 `run_ttws_init_gaussian_noise.log` 未发现 Traceback 或 fatal error。
+- TTWS 初始化已完成，并打印 `Saved visual prompt to prompt_init/voc-c/prompt_voc_gaussian_noise.pth`。
+- 日志开头有 `libgomp: Invalid value for environment variable OMP_NUM_THREADS`，说明运行环境中的 `OMP_NUM_THREADS` 值非法；建议在脚本中显式设置为正整数。
+- checkpoint 加载时的 `missing keys ... tunable_linear.weight` 与启用 text prompt 后新增参数有关，属于预期现象；`unexpected ... position_ids` 通常是 BERT position ids buffer 差异，不影响本次保存 visual prompt。

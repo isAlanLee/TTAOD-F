@@ -42,4 +42,4 @@ echo "IDM: shot_capacity=${SHOT_CAPACITY}, alpha=${ALPHA}, beta=${BETA}, thre_me
   train_cfg.alpha="${ALPHA}" \
   train_cfg.beta="${BETA}" \
   train_cfg.thre_me="${THRE_ME}" \
-  --work-dir "${WORK_DIR}"
+  --work-dir "${WORK_DIR}" 2>&1 | tee ./run_tta_train_${CORRUPTION_TYPE}.log
