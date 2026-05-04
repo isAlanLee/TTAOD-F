@@ -20,8 +20,8 @@ We construct cross-corruption benchmark by transforming PASCAL into **PASCAL-C**
 python test.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
   download/grounding_dino_swin-t_pretrain_obj365_goldg_grit9m_v3det_20231204_095047-b448804b.pth
   --cfg-options corruption_type='gaussian_noise' 
-  detector.backbone.TTWS_init=True  
-  detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
+  model.detector.backbone.TTWS_init=True  
+  model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
   --work-dir work_dirs/prompt_init
 ```
 
@@ -29,10 +29,10 @@ python test.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c
 ```
 python train.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
   --cfg-options corruption_type='gaussian_noise' 
-  detector.backbone.prompt_type='prepend'
-  detector.backbone.num_tokens=10
-  detector.backbone.prompt_deep=True
-  detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
+  model.detector.backbone.prompt_type='prepend'
+  model.detector.backbone.num_tokens=10
+  model.detector.backbone.prompt_deep=True
+  model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
   train_cfg.shot_capacity=15
   train_cfg.alpha=5.0 train_cfg.beta=5.0
   train_cfg.thre_me=0.3

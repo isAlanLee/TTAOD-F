@@ -69,7 +69,7 @@ class TTAODLoop(EpochBasedTrainLoop):
 
         for name, param in self.runner.model.student.named_parameters():
             param.requires_grad = False
-            if 'prompt_embeddings' in name:
+            if 'prompt_embeddings' in name or 'tunable_linear' in name:
                 param.requires_grad = True
 
         for name, param in self.runner.model.named_parameters():

@@ -2,7 +2,7 @@ _base_ = '../grounding_dino_swin-t_pretrain_obj365.py'
 
 detector = _base_.model
 
-detector.text_prompt=False
+detector.text_prompt=True
 
 detector.backbone = dict(
     **detector.backbone,
