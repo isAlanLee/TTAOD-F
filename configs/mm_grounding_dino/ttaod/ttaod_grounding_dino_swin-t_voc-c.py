@@ -34,7 +34,7 @@ model = dict(
     semi_test_cfg=dict(predict_on='teacher'))
 
 dataset_type = 'CocoDataset'
-data_root = 'path/to/VOC2007'
+data_root = '/root/autodl-tmp/VOC2007'
 corruption_type = 'gaussian_noise'
 class_name = ('aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable',
                 'dog','horse','motorbike','person','pottedplant','sheep','sofa','train','tvmonitor',)
@@ -132,7 +132,7 @@ unlabeled_dataset = dict(
     type=dataset_type,
     data_root=data_root,
     metainfo=metainfo,
-    ann_file='/path/to/VOC2007/voc07_test.json', # coco格式标注
+    ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
     data_prefix=dict(img=corruption_type),
     return_classes=True,
     filter_cfg=dict(filter_empty_gt=False),
@@ -158,7 +158,7 @@ val_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='/path/to/VOC2007/voc07_test.json', # coco格式标注
+        ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
         data_prefix=dict(img=corruption_type),
         test_mode=True,
         pipeline=test_pipeline,
@@ -168,7 +168,7 @@ test_dataloader = val_dataloader
 
 val_evaluator = dict(
     type='CocoMetric',
-    ann_file='/path/to/VOC2007/voc07_test.json', # coco格式标注
+    ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
     metric='bbox',
     # classwise=True,
     format_only=False,
