@@ -24,3 +24,8 @@
 
 ### 待交付说明
 - 最终回复中需要给出修改摘要、验证结果，以及基于项目主页 README 的整体训练流程。
+
+### 追加阶段进展
+- 已新增 `run_ttws_init.sh`，用于 Linux 环境下运行 TTWS visual prompt 初始化。
+- 已新增 `run_tta_train.sh`，用于 Linux 环境下运行测试时自适应训练。
+- 两个脚本均支持通过环境变量覆盖配置、腐化类型、prompt 文件、work dir 等常用参数。
