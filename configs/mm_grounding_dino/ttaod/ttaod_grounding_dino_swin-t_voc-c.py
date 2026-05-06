@@ -34,7 +34,7 @@ model = dict(
     semi_test_cfg=dict(predict_on='teacher'))
 
 dataset_type = 'CocoDataset'
-data_root = '/root/autodl-tmp/coco_corrupted'
+data_root = '/root/autodl-tmp/JPEGImages-C'
 corruption_type = 'gaussian_noise'
 class_name = ('aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable',
                 'dog','horse','motorbike','person','pottedplant','sheep','sofa','train','tvmonitor',)
