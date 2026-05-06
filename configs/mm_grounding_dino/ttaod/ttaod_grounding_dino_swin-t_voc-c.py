@@ -34,7 +34,7 @@ model = dict(
     semi_test_cfg=dict(predict_on='teacher'))
 
 dataset_type = 'CocoDataset'
-data_root = '/root/autodl-tmp/VOC2007'
+data_root = '/root/autodl-tmp/coco_corrupted'
 corruption_type = 'gaussian_noise'
 class_name = ('aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable',
                 'dog','horse','motorbike','person','pottedplant','sheep','sofa','train','tvmonitor',)
@@ -210,4 +210,4 @@ test_cfg = dict(type='TestLoop')
 default_hooks = dict(checkpoint=dict(max_keep_ckpts=1, save_best='auto'))
 custom_hooks = [dict(type='MeanTeacherHook')]
 
-load_from = 'download/grounding_dino_swin-t_pretrain_obj365_goldg_grit9m_v3det_20231204_095047-b448804b.pth'
+load_from = 'download/groundingdino_swint_ogc_mmdet-822d7e9d.pth'

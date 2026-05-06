@@ -16,7 +16,7 @@ WORK_DIR="${WORK_DIR:-work_dirs/ttaod}"
 PROMPT_TYPE="${PROMPT_TYPE:-prepend}"
 NUM_TOKENS="${NUM_TOKENS:-10}"
 PROMPT_DEEP="${PROMPT_DEEP:-True}"
-SHOT_CAPACITY="${SHOT_CAPACITY:-15}"
+SHOT_CAPACITY="${SHOT_CAPACITY:-20}"
 ALPHA="${ALPHA:-5.0}"
 BETA="${BETA:-5.0}"
 THRE_ME="${THRE_ME:-0.3}"
@@ -42,4 +42,4 @@ echo "IDM: shot_capacity=${SHOT_CAPACITY}, alpha=${ALPHA}, beta=${BETA}, thre_me
   train_cfg.alpha="${ALPHA}" \
   train_cfg.beta="${BETA}" \
   train_cfg.thre_me="${THRE_ME}" \
-  --work-dir "${WORK_DIR}" 2>&1 | tee ./run_tta_train_${CORRUPTION_TYPE}.log
+  --work-dir "${WORK_DIR}" 2>&1 | tee ./logs/run_tta_train_${CORRUPTION_TYPE}.log

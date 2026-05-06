@@ -10,7 +10,7 @@ cd "${SCRIPT_DIR}"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
 CONFIG="${CONFIG:-configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py}"
-CHECKPOINT="${CHECKPOINT:-download/grounding_dino_swin-t_pretrain_obj365_goldg_grit9m_v3det_20231204_095047-b448804b.pth}"
+CHECKPOINT="${CHECKPOINT:-download/groundingdino_swint_ogc_mmdet-822d7e9d.pth}"
 CORRUPTION_TYPE="${CORRUPTION_TYPE:-gaussian_noise}"
 PROMPT_FILE="${PROMPT_FILE:-prompt_init/voc-c/prompt_voc_${CORRUPTION_TYPE}.pth}"
 WORK_DIR="${WORK_DIR:-work_dirs/prompt_init}"
@@ -29,4 +29,4 @@ echo "Work dir: ${WORK_DIR}"
   corruption_type="'${CORRUPTION_TYPE}'" \
   model.detector.backbone.TTWS_init=True \
   model.detector.backbone.TTWS_file="'${PROMPT_FILE}'" \
-  --work-dir "${WORK_DIR}" 2>&1 | tee ./run_ttws_init_${CORRUPTION_TYPE}.log
+  --work-dir "${WORK_DIR}" 2>&1 | tee ./logs/run_ttws_init_${CORRUPTION_TYPE}.log
