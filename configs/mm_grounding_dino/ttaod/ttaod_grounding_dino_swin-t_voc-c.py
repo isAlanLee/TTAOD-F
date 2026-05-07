@@ -10,6 +10,7 @@ detector.text_prompt=True
 
 detector.backbone = dict(
     detector.backbone,
+    init_cfg=None,
     with_cp=False,
     convert_weights=False,
     prompt_type=None,

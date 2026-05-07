@@ -89,3 +89,10 @@
 - 原因是 `dict(**detector.backbone, with_cp=False, convert_weights=False, ...)` 在 `detector.backbone` 已包含同名键时会形成重复关键字。
 - 已将写法改为 `dict(detector.backbone, with_cp=False, convert_weights=False, ...)`，允许后续关键字覆盖原有键。
 - 已重新执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过。
+
+### Swin Backbone 初始化错误修复
+- 用户运行 `train.py` 时报错 `IndexError: list index out of range`，位置在 `mmdet/models/backbones/swin.py::init_weights`。
+- 原因是 base 配置仍保留 Swin backbone 的 ImageNet 预训练 `init_cfg`，模型初始化阶段会先尝试加载该 backbone checkpoint；当前 Swin 加载逻辑只保留 `backbone.` 前缀键，若 checkpoint 键名不匹配会得到空 `state_dict` 并触发索引错误。
+- OGC 官方配置不设置 backbone `init_cfg`，应由整模型 `load_from=download/groundingdino_swint_ogc_mmdet-822d7e9d.pth` 加载权重。
+- 已在 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 的 `detector.backbone` 覆盖中加入 `init_cfg=None`。
+- 已重新执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过。
