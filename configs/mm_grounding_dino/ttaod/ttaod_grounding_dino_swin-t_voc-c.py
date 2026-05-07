@@ -183,6 +183,7 @@ optim_wrapper = dict(
     paramwise_cfg=dict(
         custom_keys={
             'absolute_pos_embed': dict(decay_mult=0.),
+            'tunable_linear': dict(lr_mult=0.1),
         }))
 
 # learning policy
@@ -203,7 +204,13 @@ train_cfg = dict(type='TTAODLoop',
     shot_capacity=15,
     alpha=5.0,
     beta=5.0,
-    thre_me=0.3)
+    thre_me=0.3,
+    memory_hallucination=True,
+    hallucination_max_instances=3,
+    hallucination_beta=1.0,
+    hallucination_iou_thr=0.5,
+    hallucination_max_trials=10,
+    hallucination_scale_range=(0.5, 1.5))
 val_cfg = dict(type='TeacherStudentValLoop')
 test_cfg = dict(type='TestLoop')
 
