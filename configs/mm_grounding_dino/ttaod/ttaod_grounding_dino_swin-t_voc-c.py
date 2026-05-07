@@ -217,4 +217,5 @@ test_cfg = dict(type='TestLoop')
 default_hooks = dict(checkpoint=dict(max_keep_ckpts=1, save_best='auto'))
 custom_hooks = [dict(type='MeanTeacherHook')]
 
+# GroundingDINO-SwinT OGC checkpoint trained on Objects365, GoldG, and Cap4M.
 load_from = 'download/groundingdino_swint_ogc_mmdet-822d7e9d.pth'

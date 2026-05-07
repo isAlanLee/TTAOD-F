@@ -18,7 +18,7 @@ We construct cross-corruption benchmark by transforming PASCAL into **PASCAL-C**
 1. Run TTWS:
 ```
 python test.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
-  download/grounding_dino_swin-t_pretrain_obj365_goldg_grit9m_v3det_20231204_095047-b448804b.pth
+  download/groundingdino_swint_ogc_mmdet-822d7e9d.pth
   --cfg-options corruption_type='gaussian_noise' 
   model.detector.backbone.TTWS_init=True  
   model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'

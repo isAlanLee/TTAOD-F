@@ -62,3 +62,10 @@
 - `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 已设置 `detector.text_prompt=True`，文本提示已启用。
 - `mmdet/engine/runner/ttaod_loop.py` 已解冻 `tunable_linear`，文本提示参数可训练。
 - 已在 `optim_wrapper.paramwise_cfg.custom_keys` 下补充 `'tunable_linear': dict(lr_mult=0.1)`，使 text prompt 学习率为基础学习率的 0.1 倍。注意 MMEngine/MMDet 使用的键名是 `lr_mult`，不是 `lr_multi`。
+
+### OGC Checkpoint 对齐
+- 用户要求将当前使用的 `download/grounding_dino_swin-t_pretrain_obj365_goldg_grit9m_v3det_20231204_095047-b448804b.pth` 切换为论文一致的 `download/groundingdino_swint_ogc_mmdet-822d7e9d.pth`。
+- 已确认主 TTAOD 配置 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 的 `load_from` 指向 `download/groundingdino_swint_ogc_mmdet-822d7e9d.pth`，并补充注释说明该权重为 Objects365、GoldG、Cap4M 上训练的 OGC checkpoint。
+- 已将 README 中 TTWS 初始化示例的 checkpoint 参数从旧的 Objects365 + GoldG + GRIT9M + V3Det 权重改为 `download/groundingdino_swint_ogc_mmdet-822d7e9d.pth`。
+- 已用 `rg` 检查 README、configs、脚本入口、train.py、test.py，旧 checkpoint 字符串已不再出现。
+- 已执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，配置文件语法检查通过；本轮生成的 `configs/mm_grounding_dino/ttaod/__pycache__` 已清理。
