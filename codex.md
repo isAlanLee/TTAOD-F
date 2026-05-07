@@ -96,3 +96,21 @@
 - OGC 官方配置不设置 backbone `init_cfg`，应由整模型 `load_from=download/groundingdino_swint_ogc_mmdet-822d7e9d.pth` 加载权重。
 - 已在 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 的 `detector.backbone` 覆盖中加入 `init_cfg=None`。
 - 已重新执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过。
+
+### 论文对齐审查
+- 当前任务：审查仓库实现是否与论文《Test-Time Adaptive Object Detection with Foundation Model》对齐，重点核对 MPMT、TTWS、IDM、Memory Enhancement、Memory Hallucination 以及关键超参数。
+
+### 已确认对齐
+- 论文方法层面的核心组件已经落地：`GroundingDINO` 中实现了 text prompt (`tunable_linear`)；`SwinTransformer` 中实现了 visual prompt、deep prompt 与 TTWS 初始化逻辑；`TTAODLoop` 中实现了 IDM、Memory Enhancement、Memory Hallucination。
+- `MeanTeacherHook` 默认 `momentum=0.001`，对应论文公式中的 `gamma=0.999`（即 `teacher = 0.999 * teacher + 0.001 * student`），语义对齐。
+- `run_tta_train.sh` 默认覆盖 `prompt_type=prepend`、`num_tokens=10`、`prompt_deep=True`、`shot_capacity=20`、`alpha=5.0`、`beta=5.0`、`thre_me=0.3`，与论文 Pascal-C 主设置基本一致。
+
+### 发现的偏差
+- `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 当前默认 `train_cfg.shot_capacity=15`，而论文在 Pascal-C 主实验中使用的 IDM 容量是 20；README 的训练示例也仍写成 15。虽然 `run_tta_train.sh` 已改为 20，但裸跑配置或按 README 手动执行会偏离论文设置。
+- 同一配置文件当前默认 `train_cfg.hallucination_iou_thr=0.5`，而论文 Memory Hallucination 的实现细节使用的是 `thIoU=0.2`。该参数当前也没有在 `run_tta_train.sh` 中覆盖，因此脚本默认行为仍与论文不一致。
+
+### 下一步
+- 若继续追求严格复现论文，需要先修正 `shot_capacity` 与 `hallucination_iou_thr` 的默认值，并同步更新 README 示例，避免配置、脚本、文档三者继续分叉。
+
+### 论文对齐修正
+- 已按论文 Sec. 4.2 将 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 中的 `train_cfg.hallucination_iou_thr` 从 `0.5` 改为 `0.2`，使 Memory Hallucination 的 IoU 重叠阈值与 cross-corruption benchmark 设置一致。

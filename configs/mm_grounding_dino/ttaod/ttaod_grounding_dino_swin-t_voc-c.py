@@ -215,7 +215,7 @@ train_cfg = dict(type='TTAODLoop',
     memory_hallucination=True,
     hallucination_max_instances=3,
     hallucination_beta=1.0,
-    hallucination_iou_thr=0.5,
+    hallucination_iou_thr=0.2,
     hallucination_max_trials=10,
     hallucination_scale_range=(0.5, 1.5))
 val_cfg = dict(type='TeacherStudentValLoop')
