@@ -2,10 +2,16 @@ _base_ = '../grounding_dino_swin-t_pretrain_obj365.py'
 
 detector = _base_.model
 
+# Match the OGC checkpoint config
+# `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m.py`.
+detector.language_model.add_pooling_layer = True
+detector.bbox_head.contrastive_cfg = dict(max_text_len=256)
 detector.text_prompt=True
 
 detector.backbone = dict(
     **detector.backbone,
+    with_cp=False,
+    convert_weights=False,
     prompt_type=None,
     num_tokens=0,
     prompt_deep=False,

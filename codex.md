@@ -69,3 +69,17 @@
 - 已将 README 中 TTWS 初始化示例的 checkpoint 参数从旧的 Objects365 + GoldG + GRIT9M + V3Det 权重改为 `download/groundingdino_swint_ogc_mmdet-822d7e9d.pth`。
 - 已用 `rg` 检查 README、configs、脚本入口、train.py、test.py，旧 checkpoint 字符串已不再出现。
 - 已执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，配置文件语法检查通过；本轮生成的 `configs/mm_grounding_dino/ttaod/__pycache__` 已清理。
+
+### OGC 权重指标为 0 的日志诊断
+- 用户提供 `C:/Users/33168/Downloads/run_tta_train_gaussian_noise (2).log`，日志只记录到 `Epoch(train) [1][50/1238]`，未包含最终评估表。
+- 日志显示加载 `download/groundingdino_swint_ogc_mmdet-822d7e9d.pth` 后，`student/teacher.bbox_head.cls_branches.*.bias` 缺失；当前项目配置 `contrastive_cfg=dict(max_text_len=256, log_scale='auto', bias=True)` 会创建分类头 bias，而 OGC 官方配置 `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m.py` 使用 `contrastive_cfg=dict(max_text_len=256)`，不带 bias/log_scale。
+- 当前配置与 OGC 官方配置还存在 `language_model.add_pooling_layer=False` vs 官方 `True`、`backbone.with_cp=True/convert_weights=True` vs 官方 `False/False` 等差异。
+- 日志第 50 iter 显示 `loss=0.0000`、`grad_norm=0.0000`、所有 `unsup_*` loss 为 0，说明 teacher 伪标签经 `pseudo_label_initial_score_thr=0.3` / `cls_pseudo_thr=0.3` 过滤后基本为空，student 没有实际训练信号。
+- 初步结论：旧 GRIT9M+V3Det 权重与当前 base 配置兼容；OGC 权重需要配套 OGC Cap4M 配置，尤其要去掉分类头 bias/log_scale，否则分数会被额外负偏置压低，导致伪标签为空并最终 mAP 为 0。
+
+### OGC 配置修正
+- 已在 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 中显式覆盖 OGC 关键配置：`detector.language_model.add_pooling_layer=True`、`detector.bbox_head.contrastive_cfg=dict(max_text_len=256)`、`detector.backbone.with_cp=False`、`detector.backbone.convert_weights=False`。
+- 该修正保留 TTAOD 需要的 `detector.text_prompt=True` 和 visual prompt 配置项，但去掉与 OGC checkpoint 不匹配的分类头 bias/log_scale。
+- 已执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过；本机 Windows 环境缺少 `mmengine`，未能解析完整 MMEngine 配置。
+- 本轮语法检查生成的 `configs/mm_grounding_dino/ttaod/__pycache__` 已清理。
+- 后续在服务器上需要重新运行 `run_ttws_init.sh` 生成新的 `prompt_init/voc-c/prompt_voc_gaussian_noise.pth`，再运行 `run_tta_train.sh`；不建议复用修正前生成的 prompt 文件。
