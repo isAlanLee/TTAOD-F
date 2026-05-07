@@ -9,7 +9,7 @@ detector.bbox_head.contrastive_cfg = dict(max_text_len=256)
 detector.text_prompt=True
 
 detector.backbone = dict(
-    **detector.backbone,
+    detector.backbone,
     with_cp=False,
     convert_weights=False,
     prompt_type=None,

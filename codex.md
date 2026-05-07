@@ -83,3 +83,9 @@
 - 已执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过；本机 Windows 环境缺少 `mmengine`，未能解析完整 MMEngine 配置。
 - 本轮语法检查生成的 `configs/mm_grounding_dino/ttaod/__pycache__` 已清理。
 - 后续在服务器上需要重新运行 `run_ttws_init.sh` 生成新的 `prompt_init/voc-c/prompt_voc_gaussian_noise.pth`，再运行 `run_tta_train.sh`；不建议复用修正前生成的 prompt 文件。
+
+### OGC 配置解析错误修复
+- 用户运行 `test.py` 时报错 `TypeError: type object got multiple values for keyword argument 'with_cp'`。
+- 原因是 `dict(**detector.backbone, with_cp=False, convert_weights=False, ...)` 在 `detector.backbone` 已包含同名键时会形成重复关键字。
+- 已将写法改为 `dict(detector.backbone, with_cp=False, convert_weights=False, ...)`，允许后续关键字覆盖原有键。
+- 已重新执行 `python -m py_compile configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过。
