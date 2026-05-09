@@ -154,3 +154,28 @@
 - 已将 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 改回训练省显存设置：`detector.encoder.num_cp=6`、`detector.backbone.with_cp=True`，保留 `convert_weights=False`、`init_cfg=None`、OGC contrastive/head 配置。
 - 已在 `mmdet/engine/runner/ttaod_loop.py` 的 test phase `val_step` 外增加 `torch.no_grad()`，避免训练循环中每 iter 的评估预测构建和保留不必要计算图。
 - 已执行 Python `compile()` 语法检查，覆盖 TTAOD 配置、`ttaod_loop.py`、`swin.py`，通过；`git diff --check` 通过。本机缺少服务器依赖，未能本地复跑训练显存。
+
+## 2026-05-09
+
+### Memory Hallucination 实现审查
+- 当前任务：详细审查本地 Memory Hallucination 实现是否符合论文与 GitHub issue #3 的要求。
+- 已读取 issue #3：用户指出公开版缺少 Memory Hallucination、`thIoU=0.2` 和 crop paste pipeline；作者 `gaoyingjay` 于 2026-05-06 回复确认公开版当时不包含 MH，并建议保存 cropped images 后与 test images mixing 实现。
+- 已核对论文要点：IDM 应保存每类高质量伪标签实例，包含实例图像、DINOv2 特征与分数；MH 针对无可用伪标签的 negative images，从 IDM 随机采样高质量实例并粘贴生成 positive hallucinated images；cross-corruption 主设置包含 `thpl=0.3`、`thme=0.3`、`thIoU=0.2`、`|Qc|max=20`、Pascal-C 的 `alpha=5.0`、`beta=5.0`。
+- 本地 `mmdet/engine/runner/ttaod_loop.py` 已实现 issue #3 列出的主要缺口：`IDM_cache` 条目保存 `feature/score/image`；从 IDM 随机采样 crop；对无可用伪标签的 `unsup_student` 图像进行粘贴；使用 `hallucination_iou_thr` 拒绝重叠位置；生成 `bboxes/labels/scores` 后进入 adaptation。
+- 本地配置 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 已设置 `shot_capacity=20`、`thre_me=0.3`、`memory_hallucination=True`、`hallucination_iou_thr=0.2`、最多 3 个实例、最多 10 次重试，并已将 text prompt 学习率通过 `tunable_linear: lr_mult=0.1` 调到全局 0.2 的 0.1 倍。
+- 结论：当前本地实现已经不是官方 issue 中描述的缺失状态，功能路径与论文 Memory Hallucination 的文字描述基本对齐。
+- 仍需注意的偏差/风险：
+  - 论文没有公开足够细的实现代码；当前的 `hallucination_beta=1.0`、`hallucination_scale_range=(0.5, 1.5)`、矩形 crop paste、按类别先均匀采样再按实例采样，属于合理实现选择，但无法证明与作者私有实现逐行一致。
+  - IDM 在当前 batch teacher 伪标签生成后立即更新，然后再对同一 batch 的 negative `unsup_student` 样本做 MH；这可能允许同一 batch 内其他图像的 crop 被用于 hallucination，而论文措辞更偏向 previous test samples。
+  - IoU 检查目前只检查新粘贴实例之间的重叠；negative image 本身没有可靠伪标签，因此无法避免贴到真实但未检出的物体上。这与论文“negative images”场景可接受，但不是更强的无遮挡保证。
+  - crop 来自原图 RGB/PIL，粘贴到强增强后的 student tensor；代码根据 `bgr_to_rgb` 尝试做通道对齐。由于 pipeline 当前使用 `imdecode_backend='pillow'`，后续最好在服务器上抽样可视化 hallucinated tensor，确认颜色没有通道反转。
+- 已执行 `python -B -m py_compile mmdet/engine/runner/ttaod_loop.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`，语法检查通过且未生成 pycache。
+
+### Memory Hallucination 可视化调试开关
+- 用户要求提供服务器上可视化 hallucinated student tensor 的命令；由于此前代码没有保存开关，已在 `mmdet/engine/runner/ttaod_loop.py` 中新增环境变量调试能力。
+- 新增 `VIS_HALLUCINATION_DIR`：设置后，只有发生 Memory Hallucination 的样本会保存调试图；默认不设置时不影响训练。
+- 新增 `VIS_HALLUCINATION_MAX`：限制最多保存多少个 hallucinated 样本，默认 8，避免长训练写出过多图片。
+- 每个样本保存 3 张图：`*_before_raw.png`、`*_after_raw.png`、`*_after_model_rgb.png`。其中 `after_*` 带红色 hallucinated bbox 与类别/分数；`after_model_rgb` 会按当前 data preprocessor 的 `bgr_to_rgb` 设置做通道交换，便于检查 RGB/BGR 是否反转。
+- 推荐服务器命令：
+  - `VIS_HALLUCINATION_DIR=debug_hallucination VIS_HALLUCINATION_MAX=12 bash run_tta_train.sh`
+- 已执行 `python -m py_compile mmdet/engine/runner/ttaod_loop.py` 和 `git diff --check`，检查通过；生成的临时 `__pycache__` 已清理。

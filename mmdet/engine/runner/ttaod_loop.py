@@ -6,8 +6,9 @@ from mmengine.runner.amp import autocast
 import torch
 import numpy as np
 import operator
+import os
 import random
-from PIL import Image
+from PIL import Image, ImageDraw
 from torchvision import transforms
 import torch.nn.functional as F
 from mmengine.structures import InstanceData
@@ -98,6 +99,12 @@ class TTAODLoop(EpochBasedTrainLoop):
         self.hallucination_iou_thr = hallucination_iou_thr
         self.hallucination_max_trials = hallucination_max_trials
         self.hallucination_scale_range = hallucination_scale_range
+        self.vis_hallucination_dir = os.environ.get('VIS_HALLUCINATION_DIR')
+        self.vis_hallucination_max = int(
+            os.environ.get('VIS_HALLUCINATION_MAX', '8'))
+        self._hallucination_vis_count = 0
+        if self.vis_hallucination_dir:
+            os.makedirs(self.vis_hallucination_dir, exist_ok=True)
 
         self.num_classes = len(self.dataloader.dataset.metainfo['classes'])
 
@@ -206,6 +213,57 @@ class TTAODLoop(EpochBasedTrainLoop):
         image_tensor[:, y1:y2, x1:x2] = mixed_region.to(image_tensor.dtype)
         return bbox
 
+    def _tensor_to_pil(self, image_tensor, swap_bgr_to_rgb=False):
+        image = image_tensor.detach().float().cpu()
+        if image.dim() != 3:
+            raise ValueError('Expected an image tensor with shape CxHxW.')
+        if image.shape[0] in (1, 3):
+            image = image.permute(1, 2, 0)
+        image = image.numpy()
+        if image.shape[-1] == 1:
+            image = np.repeat(image, 3, axis=-1)
+        if image.max() <= 1.5:
+            image = image * 255
+        if swap_bgr_to_rgb and image.shape[-1] >= 3:
+            image = image[..., ::-1]
+        image = np.clip(image, 0, 255).astype(np.uint8)
+        return Image.fromarray(image)
+
+    def _draw_hallucination_boxes(self, image, bboxes, labels, scores):
+        image = image.copy()
+        draw = ImageDraw.Draw(image)
+        classes = self.dataloader.dataset.metainfo['classes']
+        for bbox, label, score in zip(bboxes, labels, scores):
+            x1, y1, x2, y2 = [int(v) for v in bbox]
+            draw.rectangle((x1, y1, x2, y2), outline=(255, 0, 0), width=3)
+            name = classes[int(label)] if int(label) < len(classes) else str(label)
+            draw.text((x1, max(y1 - 12, 0)), f'{name}:{float(score):.2f}',
+                      fill=(255, 0, 0))
+        return image
+
+    def _save_hallucination_debug(self, before_tensor, after_tensor, data_sample,
+                                  bboxes, labels, scores):
+        if (not self.vis_hallucination_dir or
+                self._hallucination_vis_count >= self.vis_hallucination_max):
+            return
+
+        idx = self._hallucination_vis_count
+        img_id = data_sample.metainfo.get('img_id', idx)
+        prefix = os.path.join(
+            self.vis_hallucination_dir, f'{idx:04d}_img{img_id}')
+        before_raw = self._tensor_to_pil(before_tensor, swap_bgr_to_rgb=False)
+        after_raw = self._tensor_to_pil(after_tensor, swap_bgr_to_rgb=False)
+        after_model_rgb = self._tensor_to_pil(
+            after_tensor, swap_bgr_to_rgb=self._raw_inputs_are_bgr())
+
+        before_raw.save(f'{prefix}_before_raw.png')
+        self._draw_hallucination_boxes(
+            after_raw, bboxes, labels, scores).save(f'{prefix}_after_raw.png')
+        self._draw_hallucination_boxes(
+            after_model_rgb, bboxes, labels,
+            scores).save(f'{prefix}_after_model_rgb.png')
+        self._hallucination_vis_count += 1
+
     def _apply_memory_hallucination(self, inputs, data_samples):
         if (self.shot_capacity == 0 or not self.memory_hallucination
                 or not self.IDM_cache):
@@ -231,6 +289,7 @@ class TTAODLoop(EpochBasedTrainLoop):
 
             num_instances = random.randint(1, max_instances)
             placed_bboxes, labels, scores = [], [], []
+            before_tensor = image_tensor.detach().clone()
             for _ in range(num_instances):
                 label, memory_item = self._sample_memory_instance()
                 if memory_item is None:
@@ -256,6 +315,9 @@ class TTAODLoop(EpochBasedTrainLoop):
             gt_instances.scores = torch.tensor(
                 scores, dtype=torch.float32, device=image_tensor.device)
             data_sample.gt_instances = gt_instances
+            self._save_hallucination_debug(
+                before_tensor, image_tensor, data_sample, placed_bboxes,
+                labels, scores)
 
     
     def run_epoch(self) -> None:
