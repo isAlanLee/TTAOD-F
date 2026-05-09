@@ -8,6 +8,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
+if ! [[ "${OMP_NUM_THREADS:-}" =~ ^[1-9][0-9]*$ ]]; then
+  export OMP_NUM_THREADS=1
+fi
+if ! [[ "${MKL_NUM_THREADS:-}" =~ ^[1-9][0-9]*$ ]]; then
+  export MKL_NUM_THREADS=1
+fi
+
 PYTHON_BIN="${PYTHON_BIN:-python}"
 CONFIG="${CONFIG:-configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py}"
 CORRUPTION_TYPE="${CORRUPTION_TYPE:-gaussian_noise}"
@@ -21,7 +28,7 @@ ALPHA="${ALPHA:-5.0}"
 BETA="${BETA:-5.0}"
 THRE_ME="${THRE_ME:-0.3}"
 
-mkdir -p "${WORK_DIR}"
+mkdir -p "${WORK_DIR}" logs
 
 echo "Running test-time adaptation"
 echo "Config: ${CONFIG}"

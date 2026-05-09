@@ -114,3 +114,31 @@
 
 ### 论文对齐修正
 - 已按论文 Sec. 4.2 将 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 中的 `train_cfg.hallucination_iou_thr` 从 `0.5` 改为 `0.2`，使 Memory Hallucination 的 IoU 重叠阈值与 cross-corruption benchmark 设置一致。
+
+### 种子设置检查
+- 已检查 `train.py`、`test.py`、`configs/_base_/default_runtime.py`、当前 TTAOD 配置以及启动脚本。
+- 当前仓库没有在训练/测试入口或 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 中显式设置全局随机种子，也没有定义 MMEngine 的 `randomness = dict(seed=..., deterministic=...)`。
+- 目前唯一与 seed 直接相关的默认配置是 `configs/_base_/default_runtime.py` 中的 `sampler_seed=dict(type='DistSamplerSeedHook')`，它用于分布式 sampler 的 epoch 级 seed 同步，不等同于固定整个实验的随机性。
+
+### 进一步论文对齐审查
+- 结合论文 Sec. 4.2 与 Table 3 继续复核后，确认当前仓库还存在一个容易被忽略但影响很大的偏差：`configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 的默认 backbone 配置仍是 `prompt_type=None`、`num_tokens=0`、`prompt_deep=False`，这意味着如果直接用该配置启动 `train.py`，实际上不会启用论文主方法中的 Visual Prompt Tuning，只会保留 Text Prompt Tuning。
+- 论文 Table 3 显示：仅启用 TPT 的平均 AP50 为 45.4，而启用 `TPT + VPT + TTWS + ME + MH` 的完整方法为 56.2，差距较大。因此当前仓库“基础配置默认值”与“论文主方法默认值”仍不一致，只是 `run_tta_train.sh` 通过命令行覆盖把它改回了论文设定。
+- 当前仍未对齐的另一处确定项是 `train_cfg.shot_capacity`：基础配置和 README 示例仍是 15，而论文 Sec. 4.2 与 Fig. 5 分析后给出的最终设置是 20；`run_tta_train.sh` 已覆盖为 20，但配置与文档尚未收齐。
+
+### 独立论文/官方实现对齐复查
+- 本轮按用户要求忽略既有结论，重新读取 arXiv 论文、官方仓库 `gaoyingjay/TTAOD-F` 的 `main` 分支和本地关键代码进行核对。
+- 官方仓库 HEAD 为 `16635fd26505d38cab79ef6dccc4efb2d24fca02`；与本地 HEAD 相比，核心差异集中在 `README.md`、`configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py`、`mmdet/engine/runner/ttaod_loop.py`，`swin.py`、`grounding_dino.py`、`ttaod_soft_teacher.py`、`mean_teacher_hook.py` 与官方仓库当前版本无差异。
+- 已确认本地已比官方仓库更接近论文的部分：启用 `detector.text_prompt=True`，解冻 `tunable_linear`，以 `lr_mult=0.1` 使 text prompt 学习率为 0.02；使用 OGC/Cap4M 权重相关配置；IDM cache 已保存 `image/feature/score`；已补充 Memory Hallucination，并使用最多 3 个实例、Beta 混合、随机缩放、最多 10 次重选、配置中 `thIoU=0.2`。
+- 仍未严格对齐论文主实验的确定项：基础配置默认 `prompt_type=None`、`num_tokens=0`、`prompt_deep=False`，直接运行配置不会启用 VPT/TTWS；基础配置与 README 仍写 `shot_capacity=15`，论文 Sec. 4.2/Fig. 5 设置为 20；`TTAODLoop.__init__` 的 `hallucination_iou_thr` 默认值仍是 0.5，虽然当前配置覆盖为 0.2。
+- 风险项：本地只覆盖了 OGC 配置中最关键的 `add_pooling_layer=True`、`contrastive_cfg=dict(max_text_len=256)`、`with_cp=False`、`convert_weights=False`、`init_cfg=None`，没有完整继承官方 `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m.py`；其中 `bbox_head.num_classes`、`encoder.num_cp` 等差异目前看不直接影响 GroundingDINOHead 的文本 token 分类路径，但仍建议后续做完整 MMEngine Config dump 和权重加载日志比对。
+- 本轮执行了 `python -m py_compile` 检查 `ttaod_loop.py`、TTAOD 配置、`grounding_dino.py`、`swin.py`，语法检查通过；编译产生的 Python 3.13 `__pycache__` 已清理/恢复。
+
+### 论文对齐与 pipeline 修正
+- 已将 TTAOD 基础配置默认改为论文主方法设置：`prompt_type='prepend'`、`num_tokens=10`、`prompt_deep=True`、默认读取 `prompt_init/voc-c/prompt_voc_gaussian_noise.pth`，避免直接运行配置时只启用 TPT 而不启用 VPT/TTWS。
+- 已将 `train_cfg.shot_capacity` 从 15 改为 20，并同步 README；已将 `TTAODLoop.__init__` 中 Memory Hallucination 的默认 `hallucination_iou_thr` 从 0.5 改为 0.2。
+- 已进一步对齐 OGC/Cap4M 配置：`detector.encoder.num_cp=-1`、`detector.bbox_head.num_classes=80`，并保留 TTA 训练必须使用的 detector `train_cfg` assigner。
+- 已修正 TTWS 初始化和默认 VPT 的冲突：`SwinTransformer` 在 `TTWS_init=True` 时不再加载尚未生成的 `TTWS_file`，forward 时也临时禁用 prompt token，确保 TTWS 使用原始视觉 token 均值生成 warm-start prompt。
+- 已将 TTAOD 的 `LoadImageFromFile` 后端改为 `imdecode_backend='pillow'`，与 OGC 测试 pipeline 对齐，同时保留 `homography_matrix` meta 以支持 teacher 到 student 的伪框投影。
+- pipeline 静态审查结论：`LoadEmptyAnnotations` 仅用于 unsupervised teacher/student 分支以避免 GT 泄漏；test 分支仍通过 `LoadAnnotations` 读取评估标注；`return_classes=True` 与 `text/custom_entities` meta 可供 GroundingDINO 生成 text prompt；hallucinated pseudo labels 只需写入 `bboxes/labels/scores`，`GroundingDINO.loss` 会在训练时根据 labels 和 text 重新生成 `positive_maps`。
+- 已修复两个脚本的运行问题：创建 `logs` 目录，并在 `OMP_NUM_THREADS` / `MKL_NUM_THREADS` 缺失或非法时设为 1；`run_ttws_init.sh` 显式覆盖为无 prompt 初始化模式。
+- 已执行无 pycache 写入的 Python `compile()` 语法检查，覆盖 TTAOD 配置、`ttaod_loop.py`、`swin.py`，检查通过；本机缺少 `mmengine`，无法在 Windows 环境解析完整配置或做训练 dry run；本机也没有 `bash`，无法执行 `bash -n`。

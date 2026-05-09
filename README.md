@@ -20,6 +20,9 @@ We construct cross-corruption benchmark by transforming PASCAL into **PASCAL-C**
 python test.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
   download/groundingdino_swint_ogc_mmdet-822d7e9d.pth
   --cfg-options corruption_type='gaussian_noise' 
+  model.detector.backbone.prompt_type=None
+  model.detector.backbone.num_tokens=0
+  model.detector.backbone.prompt_deep=False
   model.detector.backbone.TTWS_init=True  
   model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
   --work-dir work_dirs/prompt_init
@@ -33,7 +36,7 @@ python train.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-
   model.detector.backbone.num_tokens=10
   model.detector.backbone.prompt_deep=True
   model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
-  train_cfg.shot_capacity=15
+  train_cfg.shot_capacity=20
   train_cfg.alpha=5.0 train_cfg.beta=5.0
   train_cfg.thre_me=0.3
   --work-dir work_dirs/ttaod

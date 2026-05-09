@@ -808,7 +808,8 @@ class SwinTransformer(BaseModule):
                                                         )),
             }
         
-        if self.prompt_type == "prepend" and self.TTWS_file is not None:
+        if (self.prompt_type == "prepend" and self.TTWS_file is not None
+                and not self.TTWS_init):
             # 加载visual prompt的TTWS权重
             prompt_init_dict = torch.load(self.TTWS_file)
             
@@ -928,14 +929,18 @@ class SwinTransformer(BaseModule):
             x = x + self.absolute_pos_embed
         x = self.drop_after_pos(x)
 
-        if self.prompt_type == "prepend":
+        prompt_type = None if self.TTWS_init else self.prompt_type
+        num_tokens = 0 if self.TTWS_init else self.num_tokens
+        prompt_deep = False if self.TTWS_init else self.prompt_deep
+
+        if prompt_type == "prepend":
             prompt_embd = self.prompt_dropout(
                 self.prompt_embeddings.expand(x.shape[0], -1, -1))
             x = torch.cat((
                     prompt_embd, x
                 ), dim=1)
 
-        if self.prompt_type == "prepend" and self.prompt_deep:
+        if prompt_type == "prepend" and prompt_deep:
             outs = []
             for i, (stage, deep_prompt_embd) in enumerate(zip(self.stages, [
                 self.deep_prompt_embeddings_0,
@@ -944,12 +949,12 @@ class SwinTransformer(BaseModule):
                 self.deep_prompt_embeddings_3])):
                 deep_prompt_embd = self.prompt_dropout(deep_prompt_embd)
                 x, hw_shape, out, out_hw_shape = stage(x, hw_shape, 
-                                                       self.prompt_type, self.num_tokens, self.prompt_deep, deep_prompt_embd)
+                                                       prompt_type, num_tokens, prompt_deep, deep_prompt_embd)
                 if i in self.out_indices:
                     norm_layer = getattr(self, f'norm{i}')
                     
-                    if self.prompt_type == "prepend":
-                        out = out[:, self.num_tokens:, :]
+                    if prompt_type == "prepend":
+                        out = out[:, num_tokens:, :]
 
                     out = norm_layer(out)
                     out = out.view(-1, *out_hw_shape,
@@ -960,15 +965,15 @@ class SwinTransformer(BaseModule):
             outs = []
             for i, stage in enumerate(self.stages):
                 if self.TTWS_init:
-                    x, hw_shape, out, out_hw_shape = stage(x, hw_shape, self.prompt_type, self.num_tokens, 
+                    x, hw_shape, out, out_hw_shape = stage(x, hw_shape, prompt_type, num_tokens,
                                                         prompt_dict=self.prompt_dict, stage_i=i)
                 else:
-                    x, hw_shape, out, out_hw_shape = stage(x, hw_shape, self.prompt_type, self.num_tokens)
+                    x, hw_shape, out, out_hw_shape = stage(x, hw_shape, prompt_type, num_tokens)
                 if i in self.out_indices:
                     norm_layer = getattr(self, f'norm{i}')
                     
-                    if self.prompt_type == "prepend":
-                        out = out[:, self.num_tokens:, :]
+                    if prompt_type == "prepend":
+                        out = out[:, num_tokens:, :]
 
                     out = norm_layer(out)
                     out = out.view(-1, *out_hw_shape,

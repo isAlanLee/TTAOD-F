@@ -5,6 +5,8 @@ detector = _base_.model
 # Match the OGC checkpoint config
 # `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m.py`.
 detector.language_model.add_pooling_layer = True
+detector.encoder.num_cp = -1
+detector.bbox_head.num_classes = 80
 detector.bbox_head.contrastive_cfg = dict(max_text_len=256)
 detector.text_prompt=True
 
@@ -13,11 +15,11 @@ detector.backbone = dict(
     init_cfg=None,
     with_cp=False,
     convert_weights=False,
-    prompt_type=None,
-    num_tokens=0,
-    prompt_deep=False,
+    prompt_type='prepend',
+    num_tokens=10,
+    prompt_deep=True,
     TTWS_init=False,
-    TTWS_file=None,
+    TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth',
 )
 
 model = dict(
@@ -108,7 +110,9 @@ strong_pipeline = [
 
 test_pipeline = [
     dict(
-        type='LoadImageFromFile', backend_args=None),
+        type='LoadImageFromFile',
+        backend_args=None,
+        imdecode_backend='pillow'),
     dict(
         type='FixScaleResize',
         scale=(800, 1333),
@@ -124,7 +128,10 @@ test_pipeline = [
 
 # pipeline used to augment unlabeled data into different views
 unsup_pipeline = [
-    dict(type='LoadImageFromFile', backend_args=backend_args),
+    dict(
+        type='LoadImageFromFile',
+        backend_args=backend_args,
+        imdecode_backend='pillow'),
     dict(type='LoadEmptyAnnotations'),
     dict(
         type='MultiBranch',
@@ -208,7 +215,7 @@ param_scheduler = [
 train_cfg = dict(type='TTAODLoop', 
     max_epochs=max_epochs, 
     val_interval=1,
-    shot_capacity=15,
+    shot_capacity=20,
     alpha=5.0,
     beta=5.0,
     thre_me=0.3,
