@@ -147,3 +147,10 @@
 - 已在 `mmdet/models/backbones/swin.py` 中新增 TTWS prompt 字典校验：保存前和训练加载时都会检查 5 个必需键、精确 shape、tensor 类型、无 NaN/Inf、非全零；保存时会将 prompt 转为 CPU tensor，避免后续 `torch.load(..., map_location='cpu')` 兼容性问题。
 - 已在 `run_ttws_init.sh` 中追加初始化后独立校验：`test.py` 生成 prompt 文件成功后，脚本会重新加载 `PROMPT_FILE`，检查 Swin-T 期望 shape：`(1,1,96)`、`(1,1,96)`、`(2,1,192)`、`(6,1,384)`、`(2,1,768)`；不通过会直接退出并报错。
 - 已执行 Python `compile()` 语法检查，`swin.py` 通过；`git diff --check` 通过。本机缺少 `torch`，因此未能本地实际加载 `.pth` 或运行 prompt 初始化。
+
+### OOM 日志诊断与显存修复
+- 用户提供 `C:/Users/33168/Downloads/run_tta_train_gaussian_noise (3).log`，OOM 发生在 student 训练阶段的 GroundingDINO encoder FFN：`grounding_dino_layers.py:246 -> detr_layers.py:235 -> FFN Linear`，报错时已分配约 19.76GiB、reserved 约 20.95GiB。
+- 日志中的实际配置为 `model.detector.backbone.with_cp=False`、`model.detector.encoder.num_cp=-1`，这是最近为贴近 OGC 配置而关闭的 activation checkpointing；该设置会显著提高训练激活显存，且不影响 OGC 权重 key 兼容性。
+- 已将 `configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py` 改回训练省显存设置：`detector.encoder.num_cp=6`、`detector.backbone.with_cp=True`，保留 `convert_weights=False`、`init_cfg=None`、OGC contrastive/head 配置。
+- 已在 `mmdet/engine/runner/ttaod_loop.py` 的 test phase `val_step` 外增加 `torch.no_grad()`，避免训练循环中每 iter 的评估预测构建和保留不必要计算图。
+- 已执行 Python `compile()` 语法检查，覆盖 TTAOD 配置、`ttaod_loop.py`、`swin.py`，通过；`git diff --check` 通过。本机缺少服务器依赖，未能本地复跑训练显存。

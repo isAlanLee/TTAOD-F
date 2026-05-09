@@ -5,15 +5,18 @@ detector = _base_.model
 # Match the OGC checkpoint config
 # `grounding_dino_swin-t_pretrain_obj365_goldg_cap4m.py`.
 detector.language_model.add_pooling_layer = True
-detector.encoder.num_cp = -1
 detector.bbox_head.num_classes = 80
 detector.bbox_head.contrastive_cfg = dict(max_text_len=256)
 detector.text_prompt=True
 
+# Keep activation checkpointing enabled for TTA training memory usage. This
+# does not affect checkpoint key compatibility with the OGC weights.
+detector.encoder.num_cp = 6
+
 detector.backbone = dict(
     detector.backbone,
     init_cfg=None,
-    with_cp=False,
+    with_cp=True,
     convert_weights=False,
     prompt_type='prepend',
     num_tokens=10,

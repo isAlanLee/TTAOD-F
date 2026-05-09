@@ -271,8 +271,9 @@ class TTAODLoop(EpochBasedTrainLoop):
                 }
                 self.runner.model.student.eval()
 
-                with autocast(enabled=self.runner.val_loop.fp16):
-                    outputs = self.runner.model.val_step(data_batch_test)
+                with torch.no_grad():
+                    with autocast(enabled=self.runner.val_loop.fp16):
+                        outputs = self.runner.model.val_step(data_batch_test)
                 
                 # IDM Enhancement
                 if self.shot_capacity != 0:
