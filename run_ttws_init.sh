@@ -40,3 +40,41 @@ echo "Work dir: ${WORK_DIR}"
   model.detector.backbone.TTWS_init=True \
   model.detector.backbone.TTWS_file="'${PROMPT_FILE}'" \
   --work-dir "${WORK_DIR}" 2>&1 | tee ./logs/run_ttws_init_${CORRUPTION_TYPE}.log
+
+PROMPT_FILE="${PROMPT_FILE}" "${PYTHON_BIN}" - <<'PY'
+import os
+import sys
+import torch
+
+prompt_file = os.environ["PROMPT_FILE"]
+expected_shapes = {
+    "prompt_embeddings": (1, 1, 96),
+    "deep_prompt_embeddings_0": (1, 1, 96),
+    "deep_prompt_embeddings_1": (2, 1, 192),
+    "deep_prompt_embeddings_2": (6, 1, 384),
+    "deep_prompt_embeddings_3": (2, 1, 768),
+}
+
+if not os.path.isfile(prompt_file):
+    raise SystemExit(f"TTWS prompt file was not created: {prompt_file}")
+
+prompt = torch.load(prompt_file, map_location="cpu")
+missing = [key for key in expected_shapes if key not in prompt]
+unexpected = [key for key in prompt if key not in expected_shapes]
+if missing or unexpected:
+    raise SystemExit(
+        f"Invalid TTWS prompt keys: missing={missing}, unexpected={unexpected}")
+
+for key, shape in expected_shapes.items():
+    tensor = prompt[key]
+    if not torch.is_tensor(tensor):
+        raise SystemExit(f"{key} is not a tensor")
+    if tuple(tensor.shape) != shape:
+        raise SystemExit(f"{key} shape {tuple(tensor.shape)} != {shape}")
+    if not torch.isfinite(tensor).all().item():
+        raise SystemExit(f"{key} contains NaN or Inf")
+    if tensor.float().abs().max().item() <= 0:
+        raise SystemExit(f"{key} is all zeros")
+
+print(f"TTWS prompt validation passed: {prompt_file}")
+PY

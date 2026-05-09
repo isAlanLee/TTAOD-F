@@ -791,6 +791,13 @@ class SwinTransformer(BaseModule):
         # TTWS
         self.TTWS_init = TTWS_init
         self.TTWS_file = TTWS_file
+        self.ttws_prompt_shapes = {
+            "prompt_embeddings": (1, 1, embed_dims),
+            "deep_prompt_embeddings_0": (depths[0] - 1, 1, embed_dims),
+            "deep_prompt_embeddings_1": (depths[1], 1, embed_dims * 2),
+            "deep_prompt_embeddings_2": (depths[2], 1, embed_dims * 4),
+            "deep_prompt_embeddings_3": (depths[3], 1, embed_dims * 8),
+        }
         if self.TTWS_init:
             self.prompt_dict = {
                 "prompt_embeddings": nn.Parameter(torch.zeros(1, 1, embed_dims)), 
@@ -811,7 +818,8 @@ class SwinTransformer(BaseModule):
         if (self.prompt_type == "prepend" and self.TTWS_file is not None
                 and not self.TTWS_init):
             # 加载visual prompt的TTWS权重
-            prompt_init_dict = torch.load(self.TTWS_file)
+            prompt_init_dict = self._validate_ttws_prompt_dict(
+                torch.load(self.TTWS_file, map_location='cpu'))
             
             self.prompt_embeddings = nn.Parameter(prompt_init_dict["prompt_embeddings"].repeat(1, self.num_tokens, 1))
             self.deep_prompt_embeddings_0 = nn.Parameter(prompt_init_dict["deep_prompt_embeddings_0"].repeat(1, self.num_tokens, 1))
@@ -819,6 +827,40 @@ class SwinTransformer(BaseModule):
             self.deep_prompt_embeddings_2 = nn.Parameter(prompt_init_dict["deep_prompt_embeddings_2"].repeat(1, self.num_tokens, 1))
             self.deep_prompt_embeddings_3 = nn.Parameter(prompt_init_dict["deep_prompt_embeddings_3"].repeat(1, self.num_tokens, 1))
 
+    def _validate_ttws_prompt_dict(self, prompt_dict):
+        missing = [
+            key for key in self.ttws_prompt_shapes
+            if key not in prompt_dict
+        ]
+        unexpected = [
+            key for key in prompt_dict
+            if key not in self.ttws_prompt_shapes
+        ]
+        if missing or unexpected:
+            raise RuntimeError(
+                f'Invalid TTWS prompt keys. missing={missing}, '
+                f'unexpected={unexpected}')
+
+        validated = {}
+        for key, expected_shape in self.ttws_prompt_shapes.items():
+            value = prompt_dict[key]
+            if isinstance(value, nn.Parameter):
+                value = value.data
+            if not torch.is_tensor(value):
+                raise TypeError(f'TTWS prompt {key} is not a tensor.')
+
+            tensor = value.detach()
+            if tuple(tensor.shape) != expected_shape:
+                raise RuntimeError(
+                    f'TTWS prompt {key} has shape {tuple(tensor.shape)}, '
+                    f'expected {expected_shape}.')
+            if not torch.isfinite(tensor).all().item():
+                raise RuntimeError(f'TTWS prompt {key} contains NaN or Inf.')
+            if tensor.float().abs().max().item() <= 0:
+                raise RuntimeError(f'TTWS prompt {key} is all zeros.')
+            validated[key] = tensor.cpu()
+
+        return validated
 
     def train(self, mode=True):
         """Convert the model into training mode while keep layers freezed."""
@@ -982,8 +1024,9 @@ class SwinTransformer(BaseModule):
                     outs.append(out)
         
         if self.TTWS_init:
-            torch.save(self.prompt_dict, self.TTWS_file)
-            print(f"Saved visual prompt to {self.TTWS_file}")
+            prompt_dict = self._validate_ttws_prompt_dict(self.prompt_dict)
+            torch.save(prompt_dict, self.TTWS_file)
+            print(f"Saved validated visual prompt to {self.TTWS_file}")
             sys.exit(0)
 
         return outs

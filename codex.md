@@ -142,3 +142,8 @@
 - pipeline 静态审查结论：`LoadEmptyAnnotations` 仅用于 unsupervised teacher/student 分支以避免 GT 泄漏；test 分支仍通过 `LoadAnnotations` 读取评估标注；`return_classes=True` 与 `text/custom_entities` meta 可供 GroundingDINO 生成 text prompt；hallucinated pseudo labels 只需写入 `bboxes/labels/scores`，`GroundingDINO.loss` 会在训练时根据 labels 和 text 重新生成 `positive_maps`。
 - 已修复两个脚本的运行问题：创建 `logs` 目录，并在 `OMP_NUM_THREADS` / `MKL_NUM_THREADS` 缺失或非法时设为 1；`run_ttws_init.sh` 显式覆盖为无 prompt 初始化模式。
 - 已执行无 pycache 写入的 Python `compile()` 语法检查，覆盖 TTAOD 配置、`ttaod_loop.py`、`swin.py`，检查通过；本机缺少 `mmengine`，无法在 Windows 环境解析完整配置或做训练 dry run；本机也没有 `bash`，无法执行 `bash -n`。
+
+### TTWS prompt 初始化校验
+- 已在 `mmdet/models/backbones/swin.py` 中新增 TTWS prompt 字典校验：保存前和训练加载时都会检查 5 个必需键、精确 shape、tensor 类型、无 NaN/Inf、非全零；保存时会将 prompt 转为 CPU tensor，避免后续 `torch.load(..., map_location='cpu')` 兼容性问题。
+- 已在 `run_ttws_init.sh` 中追加初始化后独立校验：`test.py` 生成 prompt 文件成功后，脚本会重新加载 `PROMPT_FILE`，检查 Swin-T 期望 shape：`(1,1,96)`、`(1,1,96)`、`(2,1,192)`、`(6,1,384)`、`(2,1,768)`；不通过会直接退出并报错。
+- 已执行 Python `compile()` 语法检查，`swin.py` 通过；`git diff --check` 通过。本机缺少 `torch`，因此未能本地实际加载 `.pth` 或运行 prompt 初始化。
