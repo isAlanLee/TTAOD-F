@@ -106,7 +106,7 @@ if __name__ == "__main__":
                         'weather', 'digital'], help="Which subsets of corruptions should be applied")
     parser.add_argument("-c", "--corruptions", type=str, choices=corruption_dict.keys(), nargs="+",
                         help="Kind of corruptions to be applied, can be mixed with subset")
-    parser.add_argument("-se", "--severity", type=int, choices=range(1, 5), nargs="*",
+    parser.add_argument("-se", "--severity", type=int, choices=range(1, 6), nargs="*",
                         help="Severity level of corruption, if not provided all 5 levels will be applied")
     parser.add_argument("-j", type=int, default=1,
                         help="Multiprocessing, default is 1 core")
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     if opt.subset:
         corruptions.extend(get_corruption_names(opt.subset))
     corruptions = list(set(corruptions))  # remove duplicates
-    assert len(corruptions) > 1, ValueError("No corruption types were provided")
+    assert len(corruptions) > 0, ValueError("No corruption types were provided")
 
     # Spawn multiprocessing pool
     pool = Pool(opt.j)
@@ -141,7 +141,7 @@ if __name__ == "__main__":
             continue
 
         pool.apply_async(corrupt_image,
-                         args=[filename, opt.in_path, opt.out_path, opt.output_type, opt.corruptions, severity_levels],
+                         args=[filename, opt.in_path, opt.out_path, opt.output_type, corruptions, severity_levels],
                          callback=update_bar)
 
         # break when n is reached

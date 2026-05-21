@@ -4,12 +4,13 @@
 # 使用 imagecorruptions 库对图像进行多种类型的腐化处理
 
 # 参数配置
-INPUT_DIR="/root/autodl-tmp/VOC2007"        # 输入图像目录
-OUTPUT_DIR="/root/autodl-tmp/PASCAL-C"      # 输出目录
-OUTPUT_TYPE="subdirs"                       # 输出类型: subdirs 或 filename
-SUBSET="all"                                # 腐化类型子集: common, validation, all, noise, blur, weather, digital
-SEVERITY_LEVELS="5"                         # 严重程度级别
-NUM_CORES=20                                # 并行处理核心数
+PYTHON_BIN="${PYTHON_BIN:-python}"
+INPUT_DIR="${INPUT_DIR:-/root/autodl-tmp/VOC2007}"        # 输入图像目录
+OUTPUT_DIR="${OUTPUT_DIR:-/root/autodl-tmp/PASCAL-C}"      # 输出目录
+OUTPUT_TYPE="${OUTPUT_TYPE:-subdirs}"                       # 输出类型: subdirs 或 filename
+SUBSET="${SUBSET:-all}"                                      # 腐化类型子集: common, validation, all, noise, blur, weather, digital
+SEVERITY_LEVELS="${SEVERITY_LEVELS:-5}"                      # 严重程度级别
+NUM_CORES="${NUM_CORES:-20}"                                 # 并行处理核心数
 
 # 创建输出目录
 mkdir -p "${OUTPUT_DIR}"
@@ -39,7 +40,7 @@ echo "严重程度: ${SEVERITY_LEVELS}"
 echo "并行核心数: ${NUM_CORES}"
 echo "----------------------------------------"
 
-python "${PYTHON_SCRIPT}" \
+"${PYTHON_BIN}" "${PYTHON_SCRIPT}" \
     "${INPUT_DIR}" \
     "${OUTPUT_DIR}" \
     "${OUTPUT_TYPE}" \

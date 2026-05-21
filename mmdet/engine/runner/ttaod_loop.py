@@ -8,6 +8,7 @@ import numpy as np
 import operator
 import os
 import random
+from ast import literal_eval
 from PIL import Image, ImageDraw
 from torchvision import transforms
 import torch.nn.functional as F
@@ -19,7 +20,7 @@ def update_cache(cache, pred, feature, score, shot_capacity, image=None):
 
     with torch.no_grad():
         item = dict(
-            feature=feature.detach(),
+            feature=feature.detach().cpu(),
             score=score,
             image=image.copy() if image is not None else None)
         if pred in cache:
@@ -78,6 +79,26 @@ def bbox_iou(bbox, bboxes):
         return 0.0
     return float(np.max(inter[valid] / union[valid]))
 
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'y')
+    return bool(value)
+
+
+def parse_float_pair(value, name):
+    if isinstance(value, str):
+        value = literal_eval(value)
+    if len(value) != 2:
+        raise ValueError(f'{name} must contain exactly two values.')
+    return (float(value[0]), float(value[1]))
+
+
+def unwrap_model(model):
+    return model.module if hasattr(model, 'module') else model
+
 @LOOPS.register_module()
 class TTAODLoop(EpochBasedTrainLoop):
     """Loop for TTAOD."""
@@ -85,7 +106,14 @@ class TTAODLoop(EpochBasedTrainLoop):
                 thre_me=0.3, memory_hallucination=True,
                 hallucination_max_instances=3, hallucination_beta=1.0,
                 hallucination_iou_thr=0.2, hallucination_max_trials=10,
-                hallucination_scale_range=(0.5, 1.5), **kwargs):
+                hallucination_scale_range=(0.5, 1.5),
+                hallucination_vis_dir=None, hallucination_vis_max=8,
+                dinov2_repo=None,
+                dinov2_model=None,
+                dinov2_source='local',
+                dinov2_pretrained=False,
+                dinov2_checkpoint=None,
+                **kwargs):
         super().__init__(*args, **kwargs)
 
         # IDM 
@@ -93,20 +121,56 @@ class TTAODLoop(EpochBasedTrainLoop):
         self.shot_capacity = shot_capacity
         self.alpha, self.beta = alpha, beta
         self.thre_me = thre_me
-        self.memory_hallucination = memory_hallucination
+        self.memory_hallucination = parse_bool(memory_hallucination)
         self.hallucination_max_instances = hallucination_max_instances
         self.hallucination_beta = hallucination_beta
         self.hallucination_iou_thr = hallucination_iou_thr
         self.hallucination_max_trials = hallucination_max_trials
-        self.hallucination_scale_range = hallucination_scale_range
-        self.vis_hallucination_dir = os.environ.get('VIS_HALLUCINATION_DIR')
+        self.hallucination_scale_range = parse_float_pair(
+            hallucination_scale_range, 'hallucination_scale_range')
+        self.vis_hallucination_dir = (
+            hallucination_vis_dir or os.environ.get('VIS_HALLUCINATION_DIR'))
         self.vis_hallucination_max = int(
+            hallucination_vis_max if hallucination_vis_max is not None else
             os.environ.get('VIS_HALLUCINATION_MAX', '8'))
         self._hallucination_vis_count = 0
         if self.vis_hallucination_dir:
             os.makedirs(self.vis_hallucination_dir, exist_ok=True)
 
+        self.dinov2_repo = dinov2_repo
+        self.dinov2_model = dinov2_model
+        self.dinov2_source = dinov2_source
+        self.dinov2_pretrained = parse_bool(dinov2_pretrained)
+        self.dinov2_checkpoint = dinov2_checkpoint
+
         self.num_classes = len(self.dataloader.dataset.metainfo['classes'])
+
+    def _model_device(self):
+        model = unwrap_model(self.runner.model)
+        try:
+            return next(model.parameters()).device
+        except StopIteration:
+            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    def _load_dinov2(self):
+        if not self.dinov2_repo or not self.dinov2_model:
+            raise RuntimeError(
+                'IDM requires train_cfg.dinov2_repo and '
+                'train_cfg.dinov2_model. Pass them from run_tta_train.sh.')
+        self.dinov2_device = self._model_device()
+        self.dinov2 = torch.hub.load(
+            self.dinov2_repo,
+            self.dinov2_model,
+            source=self.dinov2_source,
+            pretrained=self.dinov2_pretrained)
+        if self.dinov2_checkpoint:
+            checkpoint = torch.load(self.dinov2_checkpoint, map_location='cpu')
+            if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                checkpoint = checkpoint['state_dict']
+            elif isinstance(checkpoint, dict) and 'model' in checkpoint:
+                checkpoint = checkpoint['model']
+            self.dinov2.load_state_dict(checkpoint)
+        self.dinov2.to(self.dinov2_device).eval()
 
 
     def run(self):
@@ -124,11 +188,7 @@ class TTAODLoop(EpochBasedTrainLoop):
         
         # IDM 
         if self.shot_capacity != 0:
-            # self.dinov2 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14", pretrained=True)
-            # 改为本地加载，联网加载经常失败
-            self.dinov2 = torch.hub.load("download/dinov2", "dinov2_vitl14", source='local', pretrained=False)
-            self.dinov2.load_state_dict(torch.load('download/dinov2_vitl14_pretrain.pth'))
-            self.dinov2.cuda().eval()
+            self._load_dinov2()
 
             self.dinov2_preprocess = transforms.Compose([
                 transforms.Resize(224),
@@ -331,7 +391,9 @@ class TTAODLoop(EpochBasedTrainLoop):
                     "inputs": data_batch["inputs"]["test"],
                     "data_samples": data_batch["data_samples"]["test"]
                 }
-                self.runner.model.student.eval()
+                model = unwrap_model(self.runner.model)
+                model.teacher.eval()
+                model.student.eval()
 
                 with torch.no_grad():
                     with autocast(enabled=self.runner.val_loop.fp16):
@@ -379,7 +441,7 @@ class TTAODLoop(EpochBasedTrainLoop):
                             
                         processed_images = torch.stack([
                             self.dinov2_preprocess(crop_img) for crop_img in cropped_imgs
-                        ]).cuda()
+                        ]).to(self.dinov2_device)
                         
                         with torch.no_grad():
                             image_features = self.dinov2(processed_images)   
@@ -403,7 +465,8 @@ class TTAODLoop(EpochBasedTrainLoop):
                 
                 # 累积每个iter的评估结果
                 self.runner.val_loop.evaluator.process(data_samples=outputs, data_batch=data_batch_test)
-                self.runner.model.student.train()
+                model.student.train()
+                model.teacher.eval()
             
             # teacher生成伪标签
             data_batch_teacher = {
@@ -417,7 +480,11 @@ class TTAODLoop(EpochBasedTrainLoop):
                     origin_pseudo_data_samples,
                     data_batch["data_samples"]['unsup_student'])
             
-            # 维护IDM cache
+            self._apply_memory_hallucination(
+                data_batch["inputs"]['unsup_student'],
+                data_batch["data_samples"]['unsup_student'])
+
+            # 维护IDM cache for future test samples.
             if self.shot_capacity != 0:
                 for idx_, data_samples_ in enumerate(origin_pseudo_data_samples):
                     if len(data_samples_.gt_instances) == 0:
@@ -457,7 +524,7 @@ class TTAODLoop(EpochBasedTrainLoop):
                         
                     processed_images = torch.stack([
                         self.dinov2_preprocess(crop_img) for crop_img in cropped_imgs
-                    ]).cuda()
+                    ]).to(self.dinov2_device)
                     
                     with torch.no_grad():
                         image_features = self.dinov2(processed_images)   
@@ -469,10 +536,6 @@ class TTAODLoop(EpochBasedTrainLoop):
                             cropped_imgs):
                         update_cache(self.IDM_cache, label_, image_feature_,
                                      score_, self.shot_capacity, cropped_img_)
-            
-            self._apply_memory_hallucination(
-                data_batch["inputs"]['unsup_student'],
-                data_batch["data_samples"]['unsup_student'])
             
             # adaptation phase
             self.run_iter(idx, data_batch)

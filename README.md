@@ -15,34 +15,51 @@ We construct cross-corruption benchmark by transforming PASCAL into **PASCAL-C**
 
 
 ## Training
-1. Run TTWS:
+All paths and reproduction parameters are passed through shell scripts. Override
+the defaults with environment variables instead of editing Python config files.
+
+1. Convert VOC XML annotations to COCO JSON if needed:
 ```
-python test.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
-  download/groundingdino_swint_ogc_mmdet-822d7e9d.pth
-  --cfg-options corruption_type='gaussian_noise' 
-  model.detector.backbone.prompt_type=None
-  model.detector.backbone.num_tokens=0
-  model.detector.backbone.prompt_deep=False
-  model.detector.backbone.TTWS_init=True  
-  model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
-  --work-dir work_dirs/prompt_init
+VOC_ROOT=/root/autodl-tmp/VOC2007 \
+COCO_OUTPUT=/root/autodl-fs/TTAOD-F/pascal_test2007.json \
+bash voc2coco.sh
 ```
 
-2. Test Time Adaptation:
+2. Generate PASCAL-C/COCO-C corruptions:
 ```
-python train.py configs/mm_grounding_dino/ttaod/ttaod_grounding_dino_swin-t_voc-c.py
-  --cfg-options corruption_type='gaussian_noise' 
-  model.detector.backbone.prompt_type='prepend'
-  model.detector.backbone.num_tokens=10
-  model.detector.backbone.prompt_deep=True
-  model.detector.backbone.TTWS_file='prompt_init/voc-c/prompt_voc_gaussian_noise.pth'
-  train_cfg.shot_capacity=20
-  train_cfg.alpha=5.0 train_cfg.beta=5.0
-  train_cfg.thre_me=0.3
-  --work-dir work_dirs/ttaod
+INPUT_DIR=/root/autodl-tmp/VOC2007 \
+OUTPUT_DIR=/root/autodl-tmp/JPEGImages-C \
+SEVERITY_LEVELS=5 \
+bash corrupt_images.sh
 ```
 
+3. Run TTWS for one corruption type:
+```
+DATA_ROOT=/root/autodl-tmp/JPEGImages-C \
+ANN_FILE=/root/autodl-fs/TTAOD-F/pascal_test2007.json \
+CORRUPTION_TYPE=gaussian_noise \
+bash run_ttws_init.sh
+```
 
+4. Run test-time adaptation:
+```
+DATA_ROOT=/root/autodl-tmp/JPEGImages-C \
+ANN_FILE=/root/autodl-fs/TTAOD-F/pascal_test2007.json \
+CORRUPTION_TYPE=gaussian_noise \
+SHOT_CAPACITY=20 \
+ALPHA=5.0 \
+BETA=5.0 \
+THRE_ME=0.3 \
+MEMORY_HALLUCINATION=True \
+HALLUCINATION_IOU_THR=0.2 \
+bash run_tta_train.sh
+```
+
+Useful overrides include `CHECKPOINT`, `PROMPT_FILE`, `WORK_DIR`,
+`PSEUDO_LABEL_INITIAL_SCORE_THR`, `CLS_PSEUDO_THR`, `DINOV2_REPO`,
+`DINOV2_CHECKPOINT`, `HALLUCINATION_MAX_INSTANCES`,
+`HALLUCINATION_BETA`, `HALLUCINATION_MAX_TRIALS`, and
+`HALLUCINATION_SCALE_RANGE`.
 
 ## Citing
 

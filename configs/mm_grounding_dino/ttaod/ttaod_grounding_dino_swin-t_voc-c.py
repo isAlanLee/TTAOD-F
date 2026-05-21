@@ -46,7 +46,8 @@ model = dict(
     semi_test_cfg=dict(predict_on='teacher'))
 
 dataset_type = 'CocoDataset'
-data_root = '/root/autodl-tmp/JPEGImages-C'
+data_root = 'data/JPEGImages-C'
+ann_file = 'data/pascal_test2007.json'
 corruption_type = 'gaussian_noise'
 class_name = ('aeroplane','bicycle','bird','boat','bottle','bus','car','cat','chair','cow','diningtable',
                 'dog','horse','motorbike','person','pottedplant','sheep','sofa','train','tvmonitor',)
@@ -149,7 +150,7 @@ unlabeled_dataset = dict(
     type=dataset_type,
     data_root=data_root,
     metainfo=metainfo,
-    ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
+    ann_file=ann_file,
     data_prefix=dict(img=corruption_type),
     return_classes=True,
     filter_cfg=dict(filter_empty_gt=False),
@@ -175,7 +176,7 @@ val_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
+        ann_file=ann_file,
         data_prefix=dict(img=corruption_type),
         test_mode=True,
         pipeline=test_pipeline,
@@ -185,7 +186,7 @@ test_dataloader = val_dataloader
 
 val_evaluator = dict(
     type='CocoMetric',
-    ann_file='/root/autodl-fs/TTAOD-F/pascal_test2007.json', # coco格式标注
+    ann_file=ann_file,
     metric='bbox',
     # classwise=True,
     format_only=False,
@@ -227,7 +228,14 @@ train_cfg = dict(type='TTAODLoop',
     hallucination_beta=1.0,
     hallucination_iou_thr=0.2,
     hallucination_max_trials=10,
-    hallucination_scale_range=(0.5, 1.5))
+    hallucination_scale_range=(0.5, 1.5),
+    hallucination_vis_dir=None,
+    hallucination_vis_max=8,
+    dinov2_repo=None,
+    dinov2_model=None,
+    dinov2_source='local',
+    dinov2_pretrained=False,
+    dinov2_checkpoint=None)
 val_cfg = dict(type='TeacherStudentValLoop')
 test_cfg = dict(type='TestLoop')
 

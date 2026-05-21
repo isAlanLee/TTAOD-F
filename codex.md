@@ -179,3 +179,53 @@
 - 推荐服务器命令：
   - `VIS_HALLUCINATION_DIR=debug_hallucination VIS_HALLUCINATION_MAX=12 bash run_tta_train.sh`
 - 已执行 `python -m py_compile mmdet/engine/runner/ttaod_loop.py` 和 `git diff --check`，检查通过；生成的临时 `__pycache__` 已清理。
+
+## 2026-05-21
+
+### 当前任务
+- 用户要求重新详细审查整个实现与论文是否一致，重点检查 Memory Hallucination，并参考 GitHub issue 与原始论文。
+- 用户同时要求清理 Python 文件中的硬编码，把运行参数放到 `.sh` 脚本传入。
+
+### 阶段发现
+- 已重新读取本地 `TTAODLoop`、TTAOD 配置、启动脚本、`GroundingDINO`、`SwinTransformer`、`MeanTeacherHook`、`TTAODSoftTeacher`、`voc2coco.py` 与腐化脚本。
+- 论文 Sec. 3.4/4.2 与 GitHub issue #2 的要点仍然支持此前判断：text prompt 与 TTWS/VPT 需要显式启用，IDM/MH 主设置应使用 `thpl=0.3`、`thme=0.3`、`thIoU=0.2`、`|Qc|max=20`。
+- 当前实现中 Memory Hallucination 的主体路径已存在，但仍有两个会影响复现的工程偏差：`TTAODSoftTeacher.get_pseudo_instances()` 覆盖父类后没有每次 `teacher.eval()`；`run_tta_train.sh` 只覆盖顶层 `corruption_type`，不会自动改写已展开到 dataloader 的 `data_prefix.img`。
+- 硬编码问题集中在 `ttaod_loop.py` 的 DINOv2 repo/权重路径、配置文件的服务器绝对路径、`voc2coco.py` 的 VOC/输出路径，以及 `.sh` 没有统一传入 MH/DINOv2/数据集参数。
+
+### 下一步
+- 将 DINOv2 repo、模型名、权重、source/pretrained、MH 可视化参数纳入 `train_cfg`。
+- 修复 teacher eval 与脚本覆盖不传播到 dataloader 的问题。
+- 为 `run_tta_train.sh` / `run_ttws_init.sh` 增加数据、checkpoint、DINOv2、Memory Hallucination 参数覆盖；为 `voc2coco.py` 增加命令行参数并补充 `.sh` 包装。
+
+### 实现修正
+- 已在 `mmdet/models/detectors/ttaod_soft_teacher.py` 的 `get_pseudo_instances()` 中恢复 `teacher.eval()`，避免外层 `model.train()` 将 frozen teacher 切到训练态后影响伪标签质量。
+- 已在 `mmdet/engine/runner/ttaod_loop.py` 的测试/评估阶段同时设置 teacher 和 student 的 eval/train 状态；`val_step` 默认按 `semi_test_cfg.predict_on='teacher'` 走 teacher，因此只设置 student eval 不够。
+- 已将 Memory Hallucination 调整为先使用历史 IDM 对当前 negative student 样本做 hallucination，再将当前 batch 的 teacher 伪标签写入 IDM，使其更符合论文中“由累积测试样本维护 memory”的在线设定。
+- 已将 DINOv2 repo、模型名、source、pretrained、checkpoint 变成 `train_cfg` 参数，并改为跟随模型 device，不再在 `ttaod_loop.py` 里固定 `download/dinov2`、`download/dinov2_vitl14_pretrain.pth` 或 `.cuda()`。
+- 已将配置文件中的服务器绝对路径替换为相对默认值，并由 `run_tta_train.sh` / `run_ttws_init.sh` 显式覆盖 dataloader/evaluator 的 `data_root`、`ann_file`、`data_prefix.img`；这修复了只覆盖顶层 `corruption_type` 不会传播到实际数据路径的问题。
+- 已扩展 `run_tta_train.sh`，从脚本传入 checkpoint、数据路径、prompt、text prompt、batch/worker、学习率、伪标签阈值、IDM、Memory Hallucination、DINOv2 等关键参数。
+- 已扩展 `run_ttws_init.sh`，从脚本传入数据路径、标注文件和实际 corruption 子目录，避免 TTWS 初始化和 TTA 训练读取不同数据。
+- 已修复 `corrupt_images.py`：severity choices 改为 1-5；仅使用 `--subset` 时也会把展开后的 corruptions 传给 worker；允许单个 corruption。
+- 已将 `voc2coco.py` 改为命令行参数工具，并新增 `voc2coco.sh` 通过环境变量传入 `VOC_ROOT` 和 `COCO_OUTPUT`。
+- 已更新 README，训练入口改为 `.sh` 脚本和环境变量覆盖，不再建议直接修改 Python 配置。
+
+### 当前审查结论
+- Memory Hallucination 主体实现现在与论文描述更接近：IDM 保存 `image/feature/score`，negative image 使用历史 IDM crop paste 生成 positive hallucinated image，默认 `thIoU=0.2`、最多 3 个实例、最多 10 次重试。
+- 仍无法保证逐行复现作者私有实现：论文未公开 crop paste 的全部细节，例如混合 Beta 参数、scale range、类别采样策略和是否处理真实但未检出的隐藏物体；当前实现把这些做成脚本参数，便于服务器上按日志继续调参。
+
+### 验证
+- 已执行无 pycache 写入的 Python `compile()` 检查，覆盖 `ttaod_loop.py`、`ttaod_soft_teacher.py`、TTAOD 配置、`corrupt_images.py`、`voc2coco.py`，通过。
+- 已执行 `git diff --check`，通过。
+- 本机没有 `bash`，因此未能执行 `bash -n` 或实际运行 `.sh`；本机也缺少训练依赖，未做 MMEngine 配置解析和服务器训练 dry run。
+
+### 论文指标与流程模块复查
+- 本轮继续对照 OpenReview/arXiv 论文、论文摘要页与本地代码，重点核对指标字段和 MPMT / TTWS / IDM / ME / MH 的过程实现。
+- 指标口径：论文 Pascal-C 表使用平均 AP50，Grounding DINO Direct Test / Mean-Teacher / Ours 分别为 44.8 / 51.5 / 56.2；COCO-C 表使用平均 mAP，Grounding DINO Direct Test / Mean-Teacher / Ours 分别为 20.6 / 24.1 / 26.0。因此 Pascal-C 复现应对比日志中的 `bbox_mAP_50`，不是 `bbox_mAP`。
+- 已确认当前 Pascal-C 默认超参基本对齐论文 Sec. 4.2：batch size 4、visual prompts 10、`thpl=0.3`、`thme=0.3`、`thIoU=0.2`、IDM 容量 20、Pascal-C `alpha=5.0 beta=5.0`、EMA 语义等价 `gamma=0.999`。
+- COCO-C 仍缺专用配置：论文要求 `alpha=1.0 beta=5.0`、COCO 类别空间与 COCO-C 数据路径；当前配置/脚本默认仍是 Pascal VOC 类别和 `alpha=5.0`。若直接拿当前脚本跑 COCO-C，指标口径和超参都会偏离论文。
+- 跨数据集 ODinW-13 也未落地：论文报告平均 mAP 54.2，而当前仓库只有 Pascal-C 主配置，没有 ODinW-13 类别/路径/超参封装。
+- TTWS 与论文描述基本对齐：当前代码在 `TTWS_init=True` 时禁用 prompt token，用第一张/第一批测试样本的图像 token 平均值初始化 prompt，并保存后退出；脚本默认 batch size 1，因此对应论文“first test sample”。注意 TTWS prompt 文件必须按 corruption/domain 单独生成，不应跨 corruption 复用。
+- TPT/VPT/Mean-Teacher 路径基本对齐：只解冻 `prompt_embeddings` 和 `tunable_linear`，视觉 prompt LR 为 0.2，text prompt 通过 `lr_mult=0.1` 得到 0.02；MeanTeacherHook 的 `momentum=0.001` 对应论文公式中的 teacher 保留系数 0.999。
+- IDM/ME/MH 主体流程基本对齐：IDM 保存 crop image、DINOv2 feature、score；ME 对 `score > thme` 的高置信预测执行增强；MH 对无可用伪标签的 negative image 从历史 IDM 采样实例并贴入。
+- 仍有实现不可完全证明一致的细节：论文未公开 MH 的 Beta 参数、scale range、类别采样策略、贴图是否使用 mask/矩形 crop、是否把 ME 后的预测同步用于 student pseudo-label 等低层实现；当前实现将这些做成可调参数，但不能保证与作者私有实现逐行一致。
+- 需要服务器验证的高风险项：实际日志中是否加载 OGC/Cap4M 权重且 missing/unexpected key 合理；`run_ttws_init.sh` 是否为当前 corruption 生成新 prompt；`run_tta_train.sh` 的 `data_prefix.img` 是否被正确覆盖；DINOv2 本地 repo/checkpoint 是否加载成功；MH 可视化是否颜色正常。

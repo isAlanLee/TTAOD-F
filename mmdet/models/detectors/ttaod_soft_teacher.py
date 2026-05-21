@@ -106,6 +106,7 @@ class TTAODSoftTeacher(SoftTeacher):
             self, batch_inputs: Tensor, batch_data_samples: SampleList
     ) -> Tuple[SampleList, Optional[dict]]:
         """Get pseudo instances from teacher model."""
+        self.teacher.eval()
         results_list = self.teacher.predict(batch_inputs, batch_data_samples)
 
         for data_samples, results in zip(batch_data_samples, results_list):
